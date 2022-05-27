@@ -14,7 +14,7 @@ interface TranslationService {
     fun getLanguages() : Call<List<Language>>
 
     companion object {
-        private const val BASE_URL = "https://libretranslate.com/"
+        private const val BASE_URL = "https://libretranslate.de/" // this official mirror site doesn't require api key
 
         fun create() : TranslationService {
             val moshi = Moshi.Builder()
