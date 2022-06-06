@@ -4,15 +4,18 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Toast
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.livedata.observeAsState
 import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
+import androidx.lifecycle.lifecycleScope
 import com.yikyaktranslate.presentation.theme.YikYakTranslateTheme
 import com.yikyaktranslate.presentation.view.TranslateView
 import com.yikyaktranslate.presentation.viewmodel.TranslateViewModel
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 class TranslateFragment : Fragment() {
 
@@ -26,23 +29,30 @@ class TranslateFragment : Fragment() {
         return ComposeView(requireContext()).apply {
             setContent {
                 YikYakTranslateTheme {
-                    // Observe fields from view model
-                    val inputText by translateViewModel.textToTranslate.observeAsState(
-                        TextFieldValue("")
-                    )
-                    val languages by translateViewModel.languagesToDisplay.observeAsState(initial = listOf())
-                    val targetLanguageIndex by translateViewModel.targetLanguageIndex
+                    val languages by translateViewModel.languages.collectAsState(initial = listOf())
+                    val targetLanguage by translateViewModel.selectedLanguage.collectAsState(null)
+                    val translatedText by translateViewModel.translatedText.collectAsState("")
 
                     // Create Compose view
                     TranslateView(
-                        inputText = inputText,
-                        onInputChange = translateViewModel::onInputTextChange,
                         languages = languages,
-                        targetLanguageIndex = targetLanguageIndex,
+                        targetLanguage = targetLanguage,
                         onTargetLanguageSelected = translateViewModel::onTargetLanguageChange,
-                        onTranslateClick = {},
-                        translatedText = ""
+                        onTranslateClick = translateViewModel::translate,
+                        translatedText = translatedText
                     )
+                }
+            }
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            translateViewModel.error.collectLatest { message ->
+                if (!message.isNullOrBlank()) {
+                    Toast.makeText(context, message, Toast.LENGTH_LONG).show()
                 }
             }
         }

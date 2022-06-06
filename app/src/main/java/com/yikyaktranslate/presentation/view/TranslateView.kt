@@ -1,17 +1,19 @@
 package com.yikyaktranslate.presentation.view
 
+import android.util.Log
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement.Absolute.spacedBy
 import androidx.compose.material.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import com.yikyaktranslate.R
+import com.yikyaktranslate.model.Language
 
 /**
  * Composable views that create primary translation screen
@@ -19,14 +21,14 @@ import com.yikyaktranslate.R
 
 @Composable
 fun TranslateView(
-    inputText: TextFieldValue,
-    onInputChange: (TextFieldValue) -> Unit,
-    languages: List<String>?,
-    targetLanguageIndex: Int,
-    onTargetLanguageSelected: (Int) -> Unit,
-    onTranslateClick: () -> Unit, // TODO: implement
-    translatedText: String // TODO: implement
+    languages: List<Language>?,
+    targetLanguage: Language?,
+    onTargetLanguageSelected: (Language) -> Unit,
+    onTranslateClick: (String) -> Unit,
+    translatedText: String
 ) {
+    var textInput by rememberSaveable { mutableStateOf("") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -41,8 +43,8 @@ fun TranslateView(
             // User inputs text to translate here
             TextField(
                 modifier = Modifier.size(150.dp, 150.dp),
-                value = inputText,
-                onValueChange = onInputChange,
+                value = textInput,
+                onValueChange = { value -> textInput = value },
                 placeholder = {
                     Text("Input text to translate")
                 }
@@ -73,15 +75,19 @@ fun TranslateView(
             } else {
                 // Creates the dropdown list of languages to select from
                 LanguageDropDown(
-                    languages = languages,
-                    targetLanguageIndex = targetLanguageIndex,
-                    onTargetLanguageSelected = onTargetLanguageSelected
+                    languages = languages.map { it.name },
+                    targetLanguage = targetLanguage?.name,
+                    onTargetLanguageSelected = { index ->
+                        languages[index].let(
+                            onTargetLanguageSelected
+                        )
+                    }
                 )
             }
         }
 
         // Button to execute the translation
-        Button(onClick = onTranslateClick) {
+        Button(onClick = { onTranslateClick(textInput) }) {
             Text(stringResource(R.string.translate_button))
         }
     }
@@ -90,7 +96,7 @@ fun TranslateView(
 @Composable
 fun LanguageDropDown(
     languages: List<String>,
-    targetLanguageIndex: Int,
+    targetLanguage: String?,
     onTargetLanguageSelected: (Int) -> Unit
 ) {
     // Keeps track of whether or not the list of languages is expanded
@@ -100,7 +106,7 @@ fun LanguageDropDown(
         // Shows currently selected language and opens dropdown menu
         Text(
             modifier = Modifier.clickable { expandLanguageList = true },
-            text = languages[targetLanguageIndex]
+            text = targetLanguage ?: ""
         )
 
         // Dropdown menu to select a language to translate to

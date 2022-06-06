@@ -1,80 +1,72 @@
 package com.yikyaktranslate.presentation.viewmodel
 
 import android.app.Application
-import android.util.Log
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.lifecycle.*
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.yikyaktranslate.R
 import com.yikyaktranslate.model.Language
+import com.yikyaktranslate.model.api.ApiResult
 import com.yikyaktranslate.service.face.TranslationService
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
-import retrofit2.Call
-import retrofit2.Callback
-import retrofit2.Response
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.launch
 
 class TranslateViewModel(application: Application) : AndroidViewModel(application) {
 
-    // Code for the source language that we are translating from; currently hardcoded to English
     private val sourceLanguageCode: String = application.getString(R.string.source_language_code)
 
-    // List of Languages that we get from the back end
-    private val languages: MutableStateFlow<List<Language>> by lazy {
-        MutableStateFlow<List<Language>>(listOf()).also {
-            loadLanguages()
+    val languages by lazy {
+        flow {
+            val response = TranslationService.getLanguages()
+            if (response.success) {
+                val languages = response.data ?: emptyList()
+                selectedLanguage.emit(languages.firstOrNull())
+                emit(languages)
+            } else {
+                handleGenericError(response)
+            }
+        }.flowOn(Dispatchers.IO)
+    }
+
+    val error = MutableStateFlow<String?>(null)
+    val selectedLanguage = MutableStateFlow<Language?>(null)
+    val translatedText = MutableStateFlow("")
+
+    private fun handleGenericError(response: ApiResult<*>) {
+        viewModelScope.launch {
+            error.emit(response.error?.message)
         }
-    }
-
-    // List of names of languages to display to user
-    val languagesToDisplay = languages.map { it.map { language ->  language.name } }.asLiveData()
-
-    // Index within languages/languagesToDisplay that the user has selected
-    val targetLanguageIndex = mutableStateOf(0)
-
-    // Text that the user has input to be translated
-    private val _textToTranslate = MutableStateFlow(TextFieldValue(""))
-    val textToTranslate = _textToTranslate.asLiveData()
-
-    /**
-     * Loads the languages from our service
-     */
-    private fun loadLanguages() {
-        val translationService = TranslationService.create()
-        val call = translationService.getLanguages()
-        call.enqueue(object : Callback<List<Language>> {
-            override fun onResponse(
-                call: Call<List<Language>>,
-                response: Response<List<Language>>
-            ) {
-                if (response.body() != null) {
-                    languages.value = response.body()!!
-                }
-            }
-
-            override fun onFailure(call: Call<List<Language>>, t: Throwable) {
-                t.message?.let { Log.e(javaClass.name, it) }
-                languages.value = listOf()
-            }
-        })
-    }
-
-    /**
-     * Updates the data when there's new text from the user
-     *
-     * @param newText TextFieldValue that contains user input we want to keep track of
-     */
-    fun onInputTextChange(newText: TextFieldValue) {
-        _textToTranslate.value = newText
     }
 
     /**
      * Updates the selected target language when the user selects a new language
      *
-     * @param newLanguageIndex Represents the index for the chosen language in the list of languages
+     * @param newLanguage The new language
      */
-    fun onTargetLanguageChange(newLanguageIndex: Int) {
-        targetLanguageIndex.value = newLanguageIndex
+    fun onTargetLanguageChange(newLanguage: Language) {
+        viewModelScope.launch {
+            selectedLanguage.emit(newLanguage)
+        }
+    }
+
+    /**
+     * Translates the text
+     * @param text The text to translate
+     */
+    fun translate(text: String) {
+        viewModelScope.launch {
+            val target = selectedLanguage.firstOrNull()?.code ?: return@launch
+            val response = TranslationService.translate(text, sourceLanguageCode, target)
+            if (response.success) {
+                val result = response.data?.translatedText ?: ""
+                translatedText.emit(result)
+            } else {
+                handleGenericError(response)
+            }
+        }
     }
 
 }
